@@ -2,14 +2,10 @@
 
 import os
 import openai
-from dotenv import load_dotenv
 
-# .env ファイルから環境変数を読み込む
-load_dotenv()
-# OpenAI APIキーの設定
-openai.api_key = os.getenv("OPENAI_API_KEY")
+# 環境変数からOpenAI APIキーを取得
+openai.api_key = os.getenv("OPENAI_API_KEY")   
 
-print("DEBUG: ", os.getenv("OPENAI_API_KEY"))  # デバッグ用にキーを表示（本番環境では削除推奨）
 
 # OpenAI APIを呼び出してプロンプトを評価する関数
 def evaluate_prompt_with_openai(prompt: str) -> dict:
