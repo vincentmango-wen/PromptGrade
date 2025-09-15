@@ -1,0 +1,144 @@
+<!-- app/static/index.html -->
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <title>PromptGrade</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <h1>PromptGrade - プロンプト評価</h1>
+
+    <!-- 入力フォーム -->
+    <textarea
+      id="promptInput"
+      rows="6"
+      placeholder="プロンプトを入力してください"
+    ></textarea
+    ><br />
+    <button onclick="sendPrompt()">送信</button>
+
+    <h2>評価結果</h2>
+    <div id="result" class="result-box"></div>
+
+    <!-- 履歴表示用の見出しとコンテナ -->
+    <h2>履歴</h2>
+    <div id="history"></div>
+
+    <script>
+      // 統合された sendPrompt と履歴関連の関数
+      async function sendPrompt() {
+        const promptEl = document.getElementById("promptInput");
+        const prompt = promptEl.value.trim();
+        const resultBox = document.getElementById("result");
+
+        // 入力チェック
+        if (!prompt) {
+          resultBox.innerHTML = `<span style="color:red">⚠️プロンプトを入力してください。</span>`;
+          return;
+        }
+
+        resultBox.innerHTML = "評価中です... ⏳";
+
+        try {
+          const response = await fetch("http://127.0.0.1:8000/evaluate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ prompt: prompt }),
+          });
+
+          if (!response.ok) {
+            // APIが500などを返した場合、本文も表示する
+            const errorText = await response.text();
+            resultBox.innerHTML = `<span style="color:red">⚠️APIエラー: ${
+              response.status
+            }<br>${escapeHtml(errorText)}</span>`;
+            return;
+          }
+
+          const data = await response.json();
+
+          // 整形して表示
+          resultBox.innerHTML = `
+            <div class="score">スコア: ${data.score}/10</div>
+            <div class="feedback"><b>フィードバック:</b><br>${escapeHtml(
+              data.feedback || ""
+            )}</div>
+            <div class="suggested"><b>改善プロンプト:</b><br>${escapeHtml(
+              data.suggested_prompt || ""
+            )}</div>
+          `;
+
+          // 履歴に保存
+          saveHistory(prompt, data);
+          renderHistory();
+        } catch (error) {
+          // ネットワークエラーや例外時
+          resultBox.innerHTML = `<span style="color:red">⚠️ネットワークエラー: ${escapeHtml(
+            error.message || String(error)
+          )}</span>`;
+        }
+      }
+
+      function escapeHtml(str) {
+        return String(str)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      }
+
+      function saveHistory(prompt, result) {
+        // 既存の履歴を取得
+        let history = JSON.parse(localStorage.getItem("promptHistory") || "[]");
+
+        // 新しい結果を追加
+        history.unshift({
+          prompt: prompt,
+          score: result.score,
+          feedback: result.feedback,
+          suggested_prompt: result.suggested_prompt,
+          timestamp: new Date().toLocaleString(),
+        });
+
+        // 最新10件だけ保存
+        history = history.slice(0, 10);
+
+        // localStorageに保存
+        localStorage.setItem("promptHistory", JSON.stringify(history));
+      }
+
+      function renderHistory() {
+        const historyDiv = document.getElementById("history");
+        const history = JSON.parse(
+          localStorage.getItem("promptHistory") || "[]"
+        );
+
+        if (history.length === 0) {
+          historyDiv.innerHTML = "<i>履歴はありません。</i>";
+          return;
+        }
+
+        historyDiv.innerHTML = history
+          .map(
+            (item) => `
+        <div class="history-item" style="border:1px solid #ccc; padding:8px; margin:5px 0;">
+            <div><b>日時:</b> ${escapeHtml(item.timestamp)}</div>
+            <div><b>入力プロンプト:</b> ${escapeHtml(item.prompt)}</div>
+            <div><b>スコア:</b> ${escapeHtml(item.score)}/10</div>
+            <div><b>フィードバック:</b> ${escapeHtml(item.feedback)}</div>
+            <div><b>改善プロンプト:</b> ${escapeHtml(
+              item.suggested_prompt
+            )}</div>
+        </div>
+        `
+          )
+          .join("");
+      }
+
+      // 初回ロード時に履歴を表示
+      window.onload = renderHistory;
+    </script>
+  </body>
+</html>
