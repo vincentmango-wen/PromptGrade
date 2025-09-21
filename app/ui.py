@@ -47,10 +47,12 @@ def render_ui():
             st.subheader("評価結果")
             # スコアは浮動小数点数が来る想定。安全のため例外処理をする。
             try:
-                score_val = float(result.get("total_score", 0.0))
+                # 新しいスキーマでは `total_score` を優先。互換性のため `score` をフォールバックとして使う。
+                score_raw = result.get("total_score", result.get("score", 0.0))
+                score_val = float(score_raw)
                 st.metric(label="total_score", value=f"{score_val:.1f}")
             except Exception:
-                st.write("Score:", result.get("total_score"))
+                st.write("Score:", result.get("total_score", result.get("score")))
 
             # フィードバック本文を整形して表示
             st.write("フィードバック:")

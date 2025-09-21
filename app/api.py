@@ -27,13 +27,18 @@ def _mock_grade(prompt_text: str) -> Dict[str, Any]:
   簡易モック評価関数（内部使用）
   - 文字数ベースでスコアを返す（0-100）
   - 開発中や API キーが無い場合のフォールバックとして使う
+
+  戻り値は実運用の結果と互換が取れるように、
+  - `total_score` と `score` を両方含める
+  - `feedback`, `raw` を含める
+  とします。
   """
   length = len(prompt_text.strip())
   if length == 0:
-    return {"score": 0.0, "feedback": "プロンプトが空です。具体的な指示を入力してください。", "raw": {}}
+    return {"total_score": 0.0, "score": 0.0, "feedback": "プロンプトが空です。具体的な指示を入力してください。", "raw": {"mock": True}}
   score = min(100.0, float(length) * 2.0)
   feedback = "良い開始です。" if score >= 60 else "もう少し具体的に目的や制約を明示してください。"
-  return {"score": score, "feedback": feedback, "raw": {"length": length, "mock": True}}
+  return {"total_score": score, "score": score, "feedback": feedback, "raw": {"length": length, "mock": True}}
 
 
 def _extract_json_from_text(text: str) -> Optional[Dict[str, Any]]:
@@ -86,13 +91,14 @@ def grade_prompt(prompt_text: str,
     use_mock: True ならモックを強制使用、False なら必ず OpenAI 呼び出しを試みる、None ならキーの有無で自動判定
     user_api_key: UI から渡されたユーザーの API キー（あればこれを優先して使用）
 
-  返り値（辞書）:
+  返り値（辞書）: 互換性を考慮して最小限のフィールドを常に含める
       {
-        "scores": {"clarity": int, "specificity": int, "goal_fit": int, "conciseness": int, "safety": int},
-        "total_score": int,
-        "feedback": [ "改善ポイント1", "改善ポイント2", ... ],
-        "examples": [ "改善後プロンプト案1", "改善後プロンプト案2", ... ],
-        "meta": {"notes": "任意の補足テキスト（短文）"}
+        "total_score": float,
+        "score": float,  # 旧コード互換
+        "feedback": str | list,
+        "examples": list,
+        "meta": dict,
+        "raw": dict
       }
 
   実行方針:
@@ -109,10 +115,14 @@ def grade_prompt(prompt_text: str,
 
   # OpenAI クライアントが使えない場合や強制的にモックにしたい場合はモックを返す
   if openai is None:
-    return {**_mock_grade(prompt_text), "raw": {"error": "openai library not installed", "mock": True}}
+    m = _mock_grade(prompt_text)
+    m.setdefault("raw", {}).update({"error": "openai library not installed", "mock": True})
+    return m
   if api_key is None and use_mock is not False:
     # キーが無い場合は安全にモックを返す
-    return {**_mock_grade(prompt_text), "raw": {"error": "no api key provided", "mock": True}}
+    m = _mock_grade(prompt_text)
+    m.setdefault("raw", {}).update({"error": "no api key provided", "mock": True})
+    return m
 
   # ここからは実際に OpenAI に問い合わせるロジック（API キーが存在する想定）
   # 注意: 実行環境により openai の API 呼び出し方法が変わる場合があります。
@@ -186,21 +196,22 @@ def grade_prompt(prompt_text: str,
     parsed = _extract_json_from_text(text)
     if parsed is not None:
       # JSON が抽出できた場合はスコアを検証して返す
-      score = _validate_and_clamp_score(parsed.get("total_score", 0.0))
+      score = _validate_and_clamp_score(parsed.get("total_score", parsed.get("score", 0.0)))
       feedback = parsed.get("feedback", "(フィードバックなし)")
       examples = parsed.get("examples", [])
       meta = parsed.get("meta", {})
-      return {"total_score": score, "feedback": feedback, "examples": examples, "meta": meta, "raw": {"response_text": text, "api_response": resp}}
+      # 常に total_score と互換のため score を含める
+      return {"total_score": score, "score": score, "feedback": feedback, "examples": examples, "meta": meta, "raw": {"response_text": text, "api_response": resp}}
     else:
       # パースに失敗したら、生のテキストから穏やかに結果を構築する
-      return {"total_score": 0.0, "feedback": text, "raw": {"response_text": text, "api_response": resp}}
+      return {"total_score": 0.0, "score": 0.0, "feedback": text, "raw": {"response_text": text, "api_response": resp}}
 
   except Exception as e:
     # ネットワークや API エラー時はモックでフォールバックし、エラー情報を raw に入れる
     mock = _mock_grade(prompt_text)
     # 例外情報をわかりやすく整形して追加
-    mock["raw"]["error"] = str(e)
+    mock.setdefault("raw", {}).update({"error": str(e)})
     # もし最後の例外オブジェクトがあれば追加情報として入れる
     if 'last_exception' in locals() and last_exception is not None:
-      mock["raw"]["last_exception"] = str(last_exception)
+      mock.setdefault("raw", {})["last_exception"] = str(last_exception)
     return mock
