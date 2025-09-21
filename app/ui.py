@@ -1,7 +1,5 @@
 import streamlit as st
 from app.api import grade_prompt
-from app import storage
-import os
 import json
 # 基本 UI を定義する関数
 # コメントは初心者向けに詳しく書いています
@@ -28,19 +26,7 @@ def render_ui():
 
     # ------------------ 入力エリア ------------------
     st.header("入力")
-    # サンプルプロンプト（初心者がすぐ試せる例）
-    samples = {
-        '顧客対応（簡潔）': "ユーザーが注文状況を尋ねるときの丁寧で簡潔な返信を作ってください。",
-        '要約（会議メモ）': "以下の会議メモを3行で要約してください: ...",
-        'コード補完（Python）': "この関数を効率化する最短の Python コードを書いてください: def foo(x):",
-    }
-    sample_key = st.selectbox('サンプルプロンプトを選択', options=['-- なし --'] + list(samples.keys()))
-    # テキスト入力ウィジェット（評価対象のプロンプト）
-    if sample_key and sample_key != '-- なし --':
-        # 選択されたサンプルを初期値に入れる
-        prompt_text = st.text_area("評価したいプロンプトを入力してください", value=samples[sample_key], height=200)
-    else:
-        prompt_text = st.text_area("評価したいプロンプトを入力してください", height=200)
+    prompt_text = st.text_area("評価したいプロンプトを入力してください", height=200)
 
     # ------------------ 実行ボタン ------------------
     if st.button("評価する"):
@@ -115,18 +101,9 @@ def render_ui():
                 else:
                     st.info(str(examples))
 
-            # 生データは折りたたみで表示（開発時のデバッグ用）
-            with st.expander("生データ / デバッグ情報（クリックで展開）"):
-                st.write(result.get("raw", {}))
 
-            # 保存ボタン
-            if st.button("この結果を履歴に保存する"):
-                try:
-                    entry = storage.save_result(prompt_text, model, temperature, result)
-                    st.success("履歴に保存しました。")
-                    st.write(entry)
-                except Exception as e:
-                    st.error(f"履歴保存に失敗しました: {e}")
+            # （履歴保存機能は無効化されています）
+            st.caption("履歴の保存/ダウンロード機能は現在無効化されています。")
 
             # 追加ヒントや次のアクション
             st.caption("ヒント: スコアに納得がいかない場合は、プロンプトに目的・制約・期待結果をより具体的に書いてみてください。")
@@ -139,39 +116,6 @@ def render_ui():
 
 
 
-    # ------------------ 履歴ダウンロード ------------------
-    st.header("履歴ダウンロード")
-    try:
-        hist_path = storage._history_file_path()
-        if os.path.exists(hist_path):
-            with open(hist_path, 'r', encoding='utf-8') as f:
-                data = f.read()
-            st.download_button('履歴を JSON としてダウンロード', data=data, file_name='history.json', mime='application/json')
-        else:
-            st.info('ダウンロード可能な履歴ファイルがありません。')
-    except Exception as e:
-        st.error(f'履歴の読み取りに失敗しました: {e}')
+    # 履歴ダウンロードは削除されました
 
-    # ------------------ 履歴タブ ------------------
-    st.header("履歴")
-    try:
-        entries = storage.list_history()
-    except Exception:
-        entries = []
-
-    if not entries:
-        st.info("保存された履歴はまだありません。")
-    else:
-        # 簡単な履歴一覧表示（先頭の数件）
-        for e in entries:
-            with st.expander(f"{e.get('timestamp')} - {e.get('prompt')[:60]}..."):
-                st.write("モデル:", e.get('model'))
-                st.write("temperature:", e.get('temperature'))
-                st.write("結果:")
-                st.write(e.get('result'))
-                if st.button(f"削除: {e.get('id')}"):
-                    ok = storage.delete_entry(e.get('id'))
-                    if ok:
-                        st.success("削除しました。ページを再読み込みしてください（または再実行）。")
-                    else:
-                        st.error("削除に失敗しました。")
+    # 履歴一覧表示は削除されました
