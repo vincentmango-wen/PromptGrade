@@ -152,7 +152,7 @@ def grade_prompt(prompt_text: str,
       - セーフティに問題がある場合は safety を低くし、improvements に注意点を明記すること。
       """
       )
-    user_message = f"Evaluate the following prompt for quality and clarity:\n\n{prompt_text}"
+    user_message = f"以下のプロンプトの品質と明確さを評価してください：\n\n{prompt_text}"
 
     # 安全のため、簡易リトライを行う（最大 2 回）
     max_retries = 2
