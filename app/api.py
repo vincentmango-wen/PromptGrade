@@ -36,6 +36,41 @@ def _mock_grade(prompt_text: str) -> Dict[str, Any]:
   return {"score": score, "feedback": feedback, "raw": {"length": length, "mock": True}}
 
 
+def _extract_json_from_text(text: str) -> Optional[Dict[str, Any]]:
+  """
+  モデルが返すテキストの中から JSON 部分を抽出してパースするヘルパー。
+  LLM はしばしば前後に説明を付与するため、最初に見つかった {...} ブロックを試す。
+  成功すれば辞書を返し、失敗すれば None を返す。
+  """
+  # 単純な戦略: 最初の { から最後の } までを取ってみる（ネストに弱いが簡易実装）
+  try:
+    start = text.find("{")
+    end = text.rfind("}")
+    if start == -1 or end == -1 or end <= start:
+      return None
+    candidate = text[start:end+1]
+    return json.loads(candidate)
+  except Exception:
+    return None
+
+
+def _validate_and_clamp_score(score_raw: Any) -> float:
+  """
+  スコアが数値として受け入れ可能か検証し、0.0-100.0 の範囲にクランプして返す。
+  パースできない場合は 0.0 を返す。
+  """
+  try:
+    s = float(score_raw)
+  except Exception:
+    return 0.0
+  # 範囲でクランプ
+  if s < 0.0:
+    return 0.0
+  if s > 100.0:
+    return 100.0
+  return s
+
+
 def grade_prompt(prompt_text: str,
          model: str = "gpt-4",
          temperature: float = 0.0,
@@ -129,14 +164,14 @@ def grade_prompt(prompt_text: str,
       text = str(resp)
 
     # 返ってきたテキストを JSON としてパースを試みる（モデルに JSON 出力を要求しているため期待される）
-    try:
-      parsed = json.loads(text)
-      score = float(parsed.get("score", 0.0))
+    parsed = _extract_json_from_text(text)
+    if parsed is not None:
+      # JSON が抽出できた場合はスコアを検証して返す
+      score = _validate_and_clamp_score(parsed.get("score", 0.0))
       feedback = parsed.get("feedback", "(フィードバックなし)")
       return {"score": score, "feedback": feedback, "raw": {"response_text": text, "api_response": resp}}
-    except Exception:
+    else:
       # パースに失敗したら、生のテキストから穏やかに結果を構築する
-      # ここではスコア抽出に失敗したら 0 を返し、全文をフィードバックとして渡す
       return {"score": 0.0, "feedback": text, "raw": {"response_text": text, "api_response": resp}}
 
   except Exception as e:

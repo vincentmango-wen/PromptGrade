@@ -13,3 +13,7 @@ venv/
 
 # env files
 *.env
+
+# test files
+test_*.py
+tests/
