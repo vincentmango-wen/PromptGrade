@@ -1,9 +1,7 @@
 import streamlit as st
 from app.api import grade_prompt
 from app import storage
-import json
 import os
-
 # 基本 UI を定義する関数
 # コメントは初心者向けに詳しく書いています
 
