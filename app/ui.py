@@ -33,16 +33,6 @@ def render_ui():
     else:
         prompt_text = st.text_area("評価したいプロンプトを入力してください", height=200)
 
-    # モデルと temperature の簡易設定（将来的に拡張可能）
-    model = st.selectbox("モデル", options=["gpt-4", "gpt-4o", "gpt-3.5-turbo"], index=0)
-    temperature = st.slider("temperature", 0.0, 1.0, 0.0)
-
-    # ユーザーが自身の OpenAI API キーを入力できる（任意）。入力はパスワード形式で隠される。
-    api_key = st.text_input("(任意) OpenAI API キーを入力 (有効にするとそのキーが使われます)", type="password")
-
-    # モックを強制的に使うかどうかのオプション
-    use_mock = st.checkbox("モックを強制使用する（API 呼び出しを行わない）", value=False)
-
     # ------------------ 実行ボタン ------------------
     if st.button("評価する"):
         # 実行中のユーザーにフィードバックを表示
@@ -95,8 +85,10 @@ def render_ui():
 
     # ------------------ 設定パネル ------------------
     st.sidebar.header('設定')
-    default_model = st.sidebar.selectbox('デフォルトモデル', options=["gpt-4", "gpt-4o", "gpt-3.5-turbo"], index=0)
-    default_temp = st.sidebar.slider('デフォルト temperature', 0.0, 1.0, 0.0)
+    model = st.sidebar.selectbox("モデル", options=["gpt-4", "gpt-4o", "gpt-3.5-turbo"], index=0)
+    temperature = st.sidebar.slider("temperature", 0.0, 1.0, 0.0)
+    api_key = st.sidebar.text_input("(任意) OpenAI API キーを入力 (有効にするとそのキーが使われます)", type="password")
+    use_mock = st.sidebar.checkbox("モックを強制使用する（API 呼び出しを行わない）", value=False)
 
     # ------------------ 履歴ダウンロード ------------------
     st.header("履歴ダウンロード")
