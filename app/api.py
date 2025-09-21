@@ -87,11 +87,13 @@ def grade_prompt(prompt_text: str,
     user_api_key: UI から渡されたユーザーの API キー（あればこれを優先して使用）
 
   返り値（辞書）:
-    {
-    "score": float,
-    "feedback": str,
-    "raw": dict  # 実際の API レスポンスやデバッグ情報を入れる
-    }
+      {
+        "scores": {"clarity": int, "specificity": int, "goal_fit": int, "conciseness": int, "safety": int},
+        "total_score": int,
+        "feedback": [ "改善ポイント1", "改善ポイント2", ... ],
+        "examples": [ "改善後プロンプト案1", "改善後プロンプト案2", ... ],
+        "meta": {"notes": "任意の補足テキスト（短文）"}
+      }
 
   実行方針:
     - use_mock が True の場合はローカルのモックを返す
@@ -119,10 +121,27 @@ def grade_prompt(prompt_text: str,
 
     # LLM に渡す指示（簡単な grader）
     system_prompt = (
-      "あなたはプロンプト評価アシスタントです。与えられたプロンプトを" 
-      "0.0〜100.0 のスコアで評価し、改善点を短く説明してください。" 
-      "出力は JSON で {\"score\": number, \"feedback\": string} の形式のみを返してください。"
-    )
+      """
+      あなたはプロンプト評価の専門家です。以下のユーザー提供プロンプトを5つの軸（明確性, 具体性, 目的適合度, 簡潔性, セーフティ）で評価し、
+      改善ポイントと改善後のプロンプト例（最大3案）を生成してください。
+
+      【出力フォーマット（厳守）】
+      JSON オブジェクトのみを返してください。フィールドは下記の通りです。
+      {
+        "scores": {"clarity": int, "specificity": int, "goal_fit": int, "conciseness": int, "safety": int},
+        "total_score": int,
+        "feedback": [ "改善ポイント1", "改善ポイント2", ... ],
+        "examples": [ "改善後プロンプト案1", "改善後プロンプト案2", ... ],
+        "meta": {"notes": "任意の補足テキスト（短文）"}
+      }
+
+      ルール:
+      - 各軸は 0〜100 の整数で示すこと。
+      - total_score は上記の重み付けで算出した整数にすること。
+      - JSON 以外のテキスト（解説）は meta.notes に短く入れるか、含めないでください。
+      - セーフティに問題がある場合は safety を低くし、improvements に注意点を明記すること。
+      """
+      )
     user_message = f"Evaluate the following prompt for quality and clarity:\n\n{prompt_text}"
 
     # 安全のため、簡易リトライを行う（最大 2 回）
@@ -167,12 +186,14 @@ def grade_prompt(prompt_text: str,
     parsed = _extract_json_from_text(text)
     if parsed is not None:
       # JSON が抽出できた場合はスコアを検証して返す
-      score = _validate_and_clamp_score(parsed.get("score", 0.0))
+      score = _validate_and_clamp_score(parsed.get("total_score", 0.0))
       feedback = parsed.get("feedback", "(フィードバックなし)")
-      return {"score": score, "feedback": feedback, "raw": {"response_text": text, "api_response": resp}}
+      examples = parsed.get("examples", [])
+      meta = parsed.get("meta", {})
+      return {"total_score": score, "feedback": feedback, "examples": examples, "meta": meta, "raw": {"response_text": text, "api_response": resp}}
     else:
       # パースに失敗したら、生のテキストから穏やかに結果を構築する
-      return {"score": 0.0, "feedback": text, "raw": {"response_text": text, "api_response": resp}}
+      return {"total_score": 0.0, "feedback": text, "raw": {"response_text": text, "api_response": resp}}
 
   except Exception as e:
     # ネットワークや API エラー時はモックでフォールバックし、エラー情報を raw に入れる
