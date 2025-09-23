@@ -21,8 +21,9 @@ def render_ui():
     st.sidebar.header('設定')
     model = st.sidebar.selectbox("モデル", options=["gpt-4", "gpt-4o", "gpt-3.5-turbo"], index=0)
     temperature = st.sidebar.slider("temperature", 0.0, 1.0, 0.0)
-    api_key = st.sidebar.text_input("(任意) OpenAI API キーを入力 (有効にするとそのキーが使われます)", type="password")
-    use_mock = st.sidebar.checkbox("モックを強制使用する（API 呼び出しを行わない）", value=False)
+    api_key = st.sidebar.text_input("OpenAI API キーを入力 (必須)", type="password")
+    # モック機能は廃止されたため UI から選択肢を削除しました。
+    use_mock = False
 
     # ------------------ 入力エリア ------------------
     st.header("入力")
@@ -35,8 +36,16 @@ def render_ui():
             try:
                 # grade_prompt の引数にユーザーの API キーとモックフラグを渡す
                 result = grade_prompt(prompt_text, model=model, temperature=temperature, use_mock=use_mock, user_api_key=(api_key or None))
+            except ValueError as e:
+                # API キー未指定など、ユーザーが修正可能なエラーは明示的に案内する
+                st.error(f"入力エラー: {e}")
+                result = None
+            except RuntimeError as e:
+                # ライブラリ未インストールなどのランタイムエラー
+                st.error(f"実行環境に問題があります: {e}")
+                result = None
             except Exception as e:
-                # 万が一の例外は画面に表示して処理を中断
+                # その他の例外は詳細を表示
                 st.error(f"評価中にエラーが発生しました: {e}")
                 result = None
 

@@ -13,32 +13,13 @@ import json
 from typing import Optional, Dict, Any
 
 try:
-  # OpenAI ライブラリは optional（requirements.txt に入っていますが、無ければ import エラーを防ぐ）
-  import openai
+    # OpenAI ライブラリは optional（requirements.txt に入っていますが、無ければ import エラーを防ぐ）
+    import openai
 except Exception:
-  openai = None
+    openai = None
 
 # 環境変数からデフォルトの API キーを読む
 DEFAULT_OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
-
-
-def _mock_grade(prompt_text: str) -> Dict[str, Any]:
-  """
-  簡易モック評価関数（内部使用）
-  - 文字数ベースでスコアを返す（0-100）
-  - 開発中や API キーが無い場合のフォールバックとして使う
-
-  戻り値は実運用の結果と互換が取れるように、
-  - `total_score` と `score` を両方含める
-  - `feedback`, `raw` を含める
-  とします。
-  """
-  length = len(prompt_text.strip())
-  if length == 0:
-    return {"total_score": 0.0, "score": 0.0, "feedback": "プロンプトが空です。具体的な指示を入力してください。", "raw": {"mock": True}}
-  score = min(100.0, float(length) * 2.0)
-  feedback = "良い開始です。" if score >= 60 else "もう少し具体的に目的や制約を明示してください。"
-  return {"total_score": score, "score": score, "feedback": feedback, "raw": {"length": length, "mock": True}}
 
 
 def _extract_json_from_text(text: str) -> Optional[Dict[str, Any]]:
@@ -77,10 +58,10 @@ def _validate_and_clamp_score(score_raw: Any) -> float:
 
 
 def grade_prompt(prompt_text: str,
-         model: str = "gpt-4",
-         temperature: float = 0.0,
-         use_mock: Optional[bool] = None,
-         user_api_key: Optional[str] = None) -> Dict[str, Any]:
+                 model: str = "gpt-4",
+                 temperature: float = 0.0,
+                 use_mock: Optional[bool] = None,
+                 user_api_key: Optional[str] = None) -> Dict[str, Any]:
   """
   プロンプトを評価して結果を返すメイン関数。
 
@@ -101,28 +82,18 @@ def grade_prompt(prompt_text: str,
         "raw": dict
       }
 
-  実行方針:
-    - use_mock が True の場合はローカルのモックを返す
-    - OpenAI ライブラリが無い、または API キーが無い場合はモックを返す（安全策）
-    - それ以外は OpenAI に問い合わせ、JSON をパースしてスコア/フィードバックを抽出する
   """
-  # まず明示的なモックの要求があればそれを使う
-  if use_mock is True:
-    return _mock_grade(prompt_text)
 
   # API キーの決定（ユーザー指定 > 環境変数）
   api_key = user_api_key or DEFAULT_OPENAI_API_KEY
 
-  # OpenAI クライアントが使えない場合や強制的にモックにしたい場合はモックを返す
+  # OpenAI ライブラリが利用できない場合はエラーにする
   if openai is None:
-    m = _mock_grade(prompt_text)
-    m.setdefault("raw", {}).update({"error": "openai library not installed", "mock": True})
-    return m
-  if api_key is None and use_mock is not False:
-    # キーが無い場合は安全にモックを返す
-    m = _mock_grade(prompt_text)
-    m.setdefault("raw", {}).update({"error": "no api key provided", "mock": True})
-    return m
+    raise RuntimeError("OpenAI ライブラリがインストールされていません。依存関係をインストールしてください。")
+
+  # API キーが無い場合はユーザーに再入力を促すため例外を投げる
+  if api_key is None:
+    raise ValueError("OpenAI API キーが提供されていません。サイドバーの入力欄に API キーを入力して再試行してください。")
 
   # ここからは実際に OpenAI に問い合わせるロジック（API キーが存在する想定）
   # 注意: 実行環境により openai の API 呼び出し方法が変わる場合があります。
@@ -207,11 +178,6 @@ def grade_prompt(prompt_text: str,
       return {"total_score": 0.0, "score": 0.0, "feedback": text, "raw": {"response_text": text, "api_response": resp}}
 
   except Exception as e:
-    # ネットワークや API エラー時はモックでフォールバックし、エラー情報を raw に入れる
-    mock = _mock_grade(prompt_text)
-    # 例外情報をわかりやすく整形して追加
-    mock.setdefault("raw", {}).update({"error": str(e)})
-    # もし最後の例外オブジェクトがあれば追加情報として入れる
-    if 'last_exception' in locals() and last_exception is not None:
-      mock.setdefault("raw", {})["last_exception"] = str(last_exception)
-    return mock
+    # ネットワークや API エラーは上位へ伝播させ、UI 側でユーザーに表示してもらう。
+    # ここで例外をそのまま再送出することで、呼び出し元（UI）で適切にハンドリングできます。
+    raise
