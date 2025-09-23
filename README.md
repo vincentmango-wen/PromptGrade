@@ -22,14 +22,14 @@
 
 ## 環境構築
 
-1. Python 仮想環境を作成して有効化
+### 1. Python 仮想環境を作成して有効化
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 ```
 
-2. 依存関係をインストール
+### 2. 依存関係をインストール
 
 ```bash
 pip install -r requirements.txt
@@ -47,7 +47,7 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-ブラウザが自動で開かない場合は表示されたローカル URL にアクセスしてください（既定: http://localhost:8501）。
+ブラウザが自動で開かない場合は表示されたローカル URL にアクセスしてください（既定: <http://localhost:8501）。>
 
 ---
 
